@@ -5,7 +5,7 @@ Dashboard estático para visualizar el volumen diario de entregas por conductor.
 ## Datos incluidos
 
 - Node.js 20+
-El archivo `data/driver-report.json` contiene el corte del `carrier_id = 46`, extraído desde MySQL desde el 1 de enero del año actual hasta el 10 de agosto de 2026, ya convertido a UTC-5. El proyecto no contiene cliente MySQL, credenciales, extractor ni endpoint de datos.
+El archivo `data/driver-report.json` contiene el corte de `carrier_id = 46` y `carrier_id = 51`, extraído desde MySQL desde el 1 de enero del año actual hasta el 10 de agosto de 2026, ya convertido a UTC-5. Incluye identificación, nombre, día y hora local de cada conductor, además del catálogo completo de conductores activos por carrier. El proyecto no contiene cliente MySQL, credenciales, extractor ni endpoint de datos.
 
 ## Ejecutar el dashboard
 
@@ -19,9 +19,11 @@ Abre `http://localhost:3000`.
 
 ## Datos y zona horaria
 
-El archivo fue generado usando `delivery_routes.created_at`, contando `DISTINCT delivery_id` y relacionando `routes`, `drivers` y `users`. Como la base guarda UTC, los límites se convirtieron a UTC sumando 5 horas y el día se calculó con `DATE_SUB(created_at, INTERVAL 5 HOUR)`.
+El archivo fue generado usando `delivery_routes.created_at`, contando `DISTINCT delivery_id`, filtrando carriers 46 y 51, y relacionando `routes`, `drivers` y `users`. Como la base guarda UTC, los límites se convirtieron a UTC sumando 5 horas y el día/hora se calcularon con `DATE_SUB(created_at, INTERVAL 5 HOUR)`.
 
 Un conductor es `APOYO` si su nombre o identificación contiene `apoyo`, sin importar mayúsculas. Los demás son `NORMAL`. El dashboard permite visualizar el mismo periodo agrupado por día o por hora local UTC-5.
+
+La tabla inferior marca como `USO CRÍTICO` a los conductores con 1 a 3 entregas en el rango y como `SIN USO` a los que tienen 0. El conteo de conductores del resumen y el catálogo consideran todos los conductores activos del carrier, aunque no tengan entregas.
 
 ## Despliegue en Vercel
 

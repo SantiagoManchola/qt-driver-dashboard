@@ -1,0 +1,7 @@
+.driver-picker { position: relative; font: 600 13px Manrope, sans-serif; text-transform: none; letter-spacing: normal; color: var(--ink); }
+.driver-picker summary { list-style: none; cursor: pointer; border: 1px solid var(--line); border-radius: 6px; padding: 12px; background: #fbf9f5; }
+.driver-picker summary::-webkit-details-marker { display: none; }
+.driver-options { position: absolute; z-index: 5; top: calc(100% + 6px); left: 0; width: min(360px, 80vw); max-height: 280px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: #fbf9f5; box-shadow: 0 12px 28px #342f2518; }
+.driver-option { display: flex; align-items: center; gap: 9px; padding: 9px 7px; color: var(--ink); font: 600 12px Manrope, sans-serif; letter-spacing: normal; text-transform: none; }
+.driver-option input { width: 15px; height: 15px; accent-color: var(--accent); }
+.clear-drivers { width: 100%; border: 0; border-top: 1px solid var(--line); padding: 10px 7px 5px; background: transparent; color: var(--accent); cursor: pointer; text-align: left; font: 600 12px Manrope, sans-serif; }
