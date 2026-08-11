@@ -25,6 +25,8 @@ Un conductor es `APOYO` si su nombre o identificación contiene `apoyo`, sin imp
 
 La tabla inferior marca como `USO CRÍTICO` a los conductores con 1 a 3 entregas en el rango y como `SIN USO` a los que tienen 0. El conteo de conductores del resumen y el catálogo consideran todos los conductores activos del carrier, aunque no tengan entregas.
 
+También se incluye una tabla de detalle con todos los conductores filtrados, sus entregas y días activos, ordenada de mayor a menor uso.
+
 ## Despliegue en Vercel
 
 1. Importa este directorio como proyecto en Vercel.

@@ -7,6 +7,8 @@ import reportJson from '../data/driver-report.json';
 type Driver = { carrierId: number; carrierName: string; driverId: number; driverName: string; identification?: string; driverType: 'NORMAL' | 'APOYO' };
 type Report = { startDate: string; endDate: string; timezone: string; carriers: Array<{ id: number; name: string }>; drivers: Driver[]; rows: Array<Driver & { day: string; hour: string; deliveries: number }> };
 const CRITICAL_DELIVERIES = 3;
+type NumericSortKey = 'deliveries' | 'activeDays';
+type SortState = { key: NumericSortKey; direction: 'asc' | 'desc' };
 
 function buildPeriods(from: string, to: string, granularity: 'DAY' | 'HOUR') {
   const periods: string[] = [];
@@ -27,6 +29,8 @@ export default function Dashboard() {
   const [type, setType] = useState<'TODOS' | 'NORMAL' | 'APOYO'>('TODOS');
   const [selectedDrivers, setSelectedDrivers] = useState<string[]>([]);
   const [granularity, setGranularity] = useState<'DAY' | 'HOUR'>('DAY');
+  const [criticalSort, setCriticalSort] = useState<SortState>({ key: 'deliveries', direction: 'asc' });
+  const [usageSort, setUsageSort] = useState<SortState>({ key: 'deliveries', direction: 'desc' });
   const [from, setFrom] = useState(report.startDate);
   const [to, setTo] = useState(report.endDate);
 
@@ -36,7 +40,7 @@ export default function Dashboard() {
   const chart = useMemo(() => { const grouped = new Map<string, number>(); filtered.forEach((row) => { const period = granularity === 'DAY' ? row.day : row.hour; grouped.set(period, (grouped.get(period) ?? 0) + row.deliveries); }); return buildPeriods(from, to, granularity).map((period) => ({ period: granularity === 'DAY' ? period.slice(5) : period.slice(5, 16), deliveries: grouped.get(period) ?? 0 })); }, [filtered, from, to, granularity]);
   const total = filtered.reduce((sum, row) => sum + row.deliveries, 0);
   const activeDays = new Set(filtered.map((row) => row.day)).size;
-  const criticalDrivers = useMemo(() => {
+  const usageDrivers = useMemo(() => {
     const usage = new Map<string, { deliveries: number; days: Set<string> }>();
     filtered.forEach((row) => {
       const key = `${row.carrierId}-${row.driverId}`;
@@ -51,9 +55,13 @@ export default function Dashboard() {
         const current = usage.get(`${driver.carrierId}-${driver.driverId}`) ?? { deliveries: 0, days: new Set<string>() };
         return { ...driver, deliveries: current.deliveries, activeDays: current.days.size };
       })
-      .filter((driver) => driver.deliveries <= CRITICAL_DELIVERIES)
-      .sort((a, b) => a.deliveries - b.deliveries || a.driverName.localeCompare(b.driverName));
+      ;
   }, [catalogDrivers, filtered, selectedDrivers]);
+  const criticalDrivers = usageDrivers.filter((driver) => driver.deliveries <= CRITICAL_DELIVERIES);
+  const sortRows = <T extends { deliveries: number; activeDays: number }>(rows: T[], sort: SortState) => [...rows].sort((a, b) => (a[sort.key] - b[sort.key]) * (sort.direction === 'asc' ? 1 : -1));
+  const sortedCriticalDrivers = sortRows(criticalDrivers, criticalSort);
+  const sortedUsageDrivers = sortRows(usageDrivers, usageSort);
+  const toggleSort = (setter: React.Dispatch<React.SetStateAction<SortState>>, key: NumericSortKey) => setter((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
 
   return <main className="shell">
     <header className="hero"><div><p className="eyebrow">QUICKTRACK / OPERACIONES</p><h1>Rendimiento de conductores</h1><p className="subtitle">Corte de datos desde el inicio del año, con calendario local UTC-5.</p></div><div className="live"><span /> ARCHIVO FIJO</div></header>
@@ -61,7 +69,8 @@ export default function Dashboard() {
     <>
       <section className="stats"><div><span>ENTREGAS</span><strong>{total.toLocaleString('es-CO')}</strong></div><div><span>DÍAS CON ACTIVIDAD</span><strong>{activeDays}</strong></div><div><span>CONDUCTORES</span><strong>{catalogDrivers.length}</strong></div><div><span>PERIODO</span><strong>{from.slice(5)} — {to.slice(5)}</strong></div></section>
       <section className="panel"><div className="panel-heading"><div><p className="eyebrow">VOLUMEN {granularity === 'DAY' ? 'DIARIO' : 'POR HORA'}</p><h2>Entregas por {granularity === 'DAY' ? 'día' : 'hora'}</h2></div><span className="timezone">UTC-5 · {selectedCarriers.length === 1 ? `CARRIER ${selectedCarriers[0]}` : '2 CARRIERS'}</span></div><div className="chart"><ResponsiveContainer width="100%" height="100%"><LineChart data={chart} margin={{ top: 12, right: 18, left: -12, bottom: 4 }}><CartesianGrid stroke="#e7e2d8" vertical={false} /><XAxis dataKey="period" tickLine={false} axisLine={false} tick={{ fill: '#817d75', fontSize: 11 }} minTickGap={granularity === 'HOUR' ? 30 : 22} /><YAxis allowDecimals={false} tickLine={false} axisLine={false} tick={{ fill: '#817d75', fontSize: 11 }} /><Tooltip contentStyle={{ border: '1px solid #ded8cc', borderRadius: 8, boxShadow: '0 8px 22px #342f2514' }} labelFormatter={(label) => `${granularity === 'DAY' ? 'Día' : 'Hora'} ${label}`} /><Line type="monotone" dataKey="deliveries" name="Entregas" stroke="#e45f35" strokeWidth={3} dot={false} activeDot={{ r: 5, fill: '#e45f35' }} /></LineChart></ResponsiveContainer></div></section>
-      <section className="panel alert-panel"><div className="panel-heading"><div><p className="eyebrow">REVISIÓN DE USO</p><h2>Conductores con uso crítico</h2><p className="table-description">Hasta {CRITICAL_DELIVERIES} entregas en el rango seleccionado, incluyendo conductores sin uso.</p></div><span className="alert-count">{criticalDrivers.length} casos</span></div>{criticalDrivers.length === 0 ? <p className="empty-table">No hay conductores con uso crítico en este rango.</p> : <div className="table-scroll"><table><thead><tr><th>Carrier</th><th>Conductor</th><th>Entregas</th><th>Días activos</th><th>Estado</th></tr></thead><tbody>{criticalDrivers.map((driver) => <tr key={`${driver.carrierId}-${driver.driverId}`}><td><span className="carrier-badge">{driver.carrierId}</span> {driver.carrierName}</td><td><strong>{driver.identification || 'Sin identificación'}</strong><br /><span>{driver.driverName}</span></td><td className="number-cell">{driver.deliveries}</td><td className="number-cell">{driver.activeDays}</td><td><span className={driver.deliveries === 0 ? 'status status-zero' : 'status'}>{driver.deliveries === 0 ? 'SIN USO' : 'USO CRÍTICO'}</span></td></tr>)}</tbody></table></div>}</section>
+      <section className="panel alert-panel"><div className="panel-heading"><div><p className="eyebrow">REVISIÓN DE USO</p><h2>Conductores con uso crítico</h2><p className="table-description">Hasta {CRITICAL_DELIVERIES} entregas en el rango seleccionado, incluyendo conductores sin uso.</p></div><span className="alert-count">{criticalDrivers.length} casos</span></div>{criticalDrivers.length === 0 ? <p className="empty-table">No hay conductores con uso crítico en este rango.</p> : <div className="table-scroll"><table><thead><tr><th>Carrier</th><th>Conductor</th><th><button className="table-sort" onClick={() => toggleSort(setCriticalSort, 'deliveries')}>Entregas {criticalSort.key === 'deliveries' ? (criticalSort.direction === 'asc' ? '↑' : '↓') : '↕'}</button></th><th><button className="table-sort" onClick={() => toggleSort(setCriticalSort, 'activeDays')}>Días activos {criticalSort.key === 'activeDays' ? (criticalSort.direction === 'asc' ? '↑' : '↓') : '↕'}</button></th><th>Estado</th></tr></thead><tbody>{sortedCriticalDrivers.map((driver) => <tr key={`${driver.carrierId}-${driver.driverId}`}><td><span className="carrier-badge">{driver.carrierId}</span> {driver.carrierName}</td><td><strong>{driver.identification || 'Sin identificación'}</strong><br /><span>{driver.driverName}</span></td><td className="number-cell">{driver.deliveries}</td><td className="number-cell">{driver.activeDays}</td><td><span className={driver.deliveries === 0 ? 'status status-zero' : 'status'}>{driver.deliveries === 0 ? 'SIN USO' : 'USO CRÍTICO'}</span></td></tr>)}</tbody></table></div>}</section>
+      <section className="panel alert-panel"><div className="panel-heading"><div><p className="eyebrow">DETALLE POR CONDUCTOR</p><h2>Uso en el periodo</h2><p className="table-description">Todos los conductores incluidos en los filtros. Toca los valores numéricos para ordenar.</p></div><span className="alert-count">{usageDrivers.length} conductores</span></div><div className="table-scroll"><table><thead><tr><th>#</th><th>Carrier</th><th>Conductor</th><th><button className="table-sort" onClick={() => toggleSort(setUsageSort, 'deliveries')}>Entregas {usageSort.key === 'deliveries' ? (usageSort.direction === 'asc' ? '↑' : '↓') : '↕'}</button></th><th><button className="table-sort" onClick={() => toggleSort(setUsageSort, 'activeDays')}>Días activos {usageSort.key === 'activeDays' ? (usageSort.direction === 'asc' ? '↑' : '↓') : '↕'}</button></th></tr></thead><tbody>{sortedUsageDrivers.map((driver, index) => <tr key={`${driver.carrierId}-${driver.driverId}`}><td className="number-cell">{index + 1}</td><td><span className="carrier-badge">{driver.carrierId}</span> {driver.carrierName}</td><td><strong>{driver.identification || 'Sin identificación'}</strong><br /><span>{driver.driverName}</span></td><td className="number-cell">{driver.deliveries}</td><td className="number-cell">{driver.activeDays}</td></tr>)}</tbody></table></div></section>
       <p className="footnote">Datos disponibles para NVO Cruz Verde (46) y NVO Animals (51). La categoría APOYO se identifica si el nombre o la identificación del conductor contiene “apoyo”. Las horas se convierten de UTC a UTC-5 antes de agrupar.</p>
     </>
   </main>;
